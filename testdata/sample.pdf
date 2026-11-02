@@ -1,0 +1,38 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 370 >>
+stream
+BT /F1 28 Tf 72 720 Td (ImageHover test document) Tj ET
+BT /F1 14 Tf 72 680 Td (This is a sample PDF for the ImageHover test harness.) Tj ET
+BT /F1 14 Tf 72 656 Td (It has one page with plain text and a few shapes.) Tj ET
+BT /F1 14 Tf 72 608 Td (Page 1 of 1) Tj ET
+0.2 0.4 0.8 rg 72 300 200 150 re f
+0.95 0.6 0.1 rg 320 300 200 150 re f
+0 0 0 RG 2 w 72 280 m 520 280 l S
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000662 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+732
+%%EOF

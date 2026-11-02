@@ -1,0 +1,70 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+#include "version.h"
+
+/* App icon (Explorer, taskbar, tray, settings window). Made by tools/make_icon.py */
+IDI_APP ICON "imagehover.ico"
+
+/* Manifest: Common Controls v6, per-monitor DPI, no admin. */
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+/* Settings window */
+IDD_SETTINGS DIALOGEX 0, 0, 268, 238
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "ImageHover Settings"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "Show previews in", -1, 7, 7, 254, 52
+    AUTOCHECKBOX    "File Explorer", IDC_EXPLORER, 16, 20, 200, 10
+    AUTOCHECKBOX    "Open and Save dialogs", IDC_DIALOGS, 16, 32, 200, 10
+    AUTOCHECKBOX    "Desktop", IDC_DESKTOP, 16, 44, 200, 10
+
+    GROUPBOX        "Behavior", -1, 7, 64, 254, 66
+    LTEXT           "Hover delay (milliseconds):", -1, 16, 80, 110, 8
+    EDITTEXT        IDC_DELAY, 130, 78, 46, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_DELAY_SPIN, UPDOWN_CLASS,
+                    UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS,
+                    176, 78, 10, 12
+    LTEXT           "Preview size:", -1, 16, 98, 110, 8
+    COMBOBOX        IDC_PREVIEW_SIZE, 130, 96, 122, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    AUTOCHECKBOX    "Show previews only while the Shift key is held down", IDC_SHIFT, 16, 115, 240, 10
+
+    GROUPBOX        "Content", -1, 7, 135, 254, 54
+    AUTOCHECKBOX    "Play animated GIF and WebP images", IDC_ANIMATE, 16, 148, 240, 10
+    AUTOCHECKBOX    "Videos, PDFs and other files (uses Windows thumbnails)", IDC_THUMBS, 16, 160, 240, 10
+    AUTOCHECKBOX    "Show file size, date and camera under the image", IDC_DETAILS, 16, 172, 240, 10
+
+    AUTOCHECKBOX    "Start ImageHover with Windows", IDC_AUTOSTART, 10, 198, 200, 10
+
+    DEFPUSHBUTTON   "OK", IDOK, 156, 217, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 211, 217, 50, 14
+END
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION     IH_VER_MAJOR,IH_VER_MINOR,IH_VER_PATCH,0
+ PRODUCTVERSION  IH_VER_MAJOR,IH_VER_MINOR,IH_VER_PATCH,0
+ FILEFLAGSMASK   0x3fL
+ FILEFLAGS       0x0L
+ FILEOS          VOS_NT_WINDOWS32
+ FILETYPE        VFT_APP
+ FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription",  "ImageHover - image preview on mouse hover"
+            VALUE "FileVersion",      IH_VER_STR
+            VALUE "InternalName",     "ImageHover"
+            VALUE "OriginalFilename", "ImageHover.exe"
+            VALUE "ProductName",      "ImageHover"
+            VALUE "ProductVersion",   IH_VER_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

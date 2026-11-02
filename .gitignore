@@ -1,0 +1,17 @@
+# Build output
+*.exe
+*.res
+*.o
+*.obj
+
+# Debug log (debug builds only)
+ImageHover.log
+
+# Test harness output
+tools/out/
+
+# Local sample images (not part of the repo)
+imageSamples/
+
+# Release packages (made by release.bat)
+dist/
