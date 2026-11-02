@@ -6,7 +6,7 @@ All notable changes to ImageHover are listed here.
 Sections per version: **Added**, **Changed**, **Fixed**, **Removed**. Empty sections are left out
 of the release notes.
 
-## [1.0.0] - 2026-11-02
+## [1.0.1] - 2026-11-02
 
 First public release.
 
