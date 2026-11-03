@@ -12,6 +12,7 @@ HWND      g_msgWnd;
 BOOL      g_log;
 void OnSettingsChanged(BOOL sizeChanged) { (void)sizeChanged; }
 BOOL PreviewDump(int f, const WCHAR *bmpPath);
+void PreviewWindowRect(RECT *r);
 
 static int s_fail;
 #define CHECK(c, msg) do { if (c) wprintf(L"   ok   %s\n", msg); else { wprintf(L"   FAIL %s\n", msg); s_fail++; } } while (0)
@@ -77,6 +78,46 @@ int wmain(int argc, WCHAR **argv)
         CHECK(PreviewDump(p->frameCount > 1 ? 5 : 0, bmp), L"rendered preview saved");
         PreviewHide();
         PreviewRelease(p);
+    }
+
+    /* Max size: a tall image next to a cursor near the top left must use (almost) the
+       full screen height, stay on the screen and never cover the cursor. */
+    {
+        WCHAR full[PATHBUF];
+        GetFullPathNameW(L"testdata\\tall.png", PATHBUF, full, NULL);
+        POINT cur = { 300, 207 };
+        HMONITOR mon = MonitorFromPoint(cur, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi = { sizeof(mi) };
+        GetMonitorInfoW(mon, &mi);
+        RECT wa = mi.rcWork;
+        int large[2] = {0, 0};
+        DWORD modes[2] = { 45, SIZE_PCT_MAX };
+        for (int m = 0; m < 2; m++) {
+            g_set.sizePct = modes[m];
+            int bw, bh;
+            PreviewBoxFor(cur, &bw, &bh);
+            LoaderRequest(full, bw, bh, 900 + m);
+            Preview *p = WaitResult(900 + m);
+            if (!p) { CHECK(FALSE, L"tall.png loaded"); continue; }
+            PreviewShow(p, cur);
+            RECT r;
+            PreviewWindowRect(&r);
+            wprintf(L"\ntall.png size=%lu%%  window %ldx%ld at %ld,%ld  (work area %ldx%ld)\n", modes[m],
+                    r.right - r.left, r.bottom - r.top, r.left, r.top,
+                    wa.right - wa.left, wa.bottom - wa.top);
+            large[m] = r.bottom - r.top;
+            CHECK(!PtInRect(&r, cur), L"preview does not cover the cursor");
+            CHECK(r.left >= wa.left && r.top >= wa.top && r.right <= wa.right && r.bottom <= wa.bottom,
+                  L"preview stays on the screen");
+            CreateDirectoryW(L"tools\\out", NULL);
+            CHECK(PreviewDump(0, m ? L"tools\\out\\tall_max.bmp" : L"tools\\out\\tall_large.bmp"),
+                  L"rendered preview saved");
+            PreviewHide();
+            PreviewRelease(p);
+        }
+        CHECK(large[1] > large[0] * 3 / 2, L"Max is much taller than Large");
+        CHECK(large[1] >= (wa.bottom - wa.top) * 9 / 10, L"Max uses at least 90% of the screen height");
+        g_set.sizePct = 45;
     }
 
     CacheClear();

@@ -11,9 +11,9 @@
 
 Settings g_set;
 
-static const DWORD  kSizePct[]   = { 25, 35, 45, 60 };
-static const WCHAR *kSizeNames[] = { L"Small", L"Medium", L"Large", L"Extra large" };
-#define SIZE_COUNT 4
+static const DWORD  kSizePct[]   = { 25, 35, 45, 60, SIZE_PCT_MAX };
+static const WCHAR *kSizeNames[] = { L"Small", L"Medium", L"Large", L"Extra large", L"Max" };
+#define SIZE_COUNT 5
 
 static HWND  s_dlg;
 static HICON s_iconBig, s_iconSmall;
@@ -52,7 +52,7 @@ void SettingsLoad(void)
     if (g_set.hoverMs < 100) g_set.hoverMs = 100;
     if (g_set.hoverMs > 3000) g_set.hoverMs = 3000;
     if (g_set.sizePct < 15) g_set.sizePct = 15;
-    if (g_set.sizePct > 80) g_set.sizePct = 80;
+    if (g_set.sizePct > 80 && g_set.sizePct != SIZE_PCT_MAX) g_set.sizePct = 80;
 }
 
 void SettingsSave(void)
@@ -161,7 +161,8 @@ static void InitDialog(HWND d)
     int sel = SIZE_COUNT - 1;
     for (int i = 0; i < SIZE_COUNT; i++) {
         WCHAR s[64];
-        _snwprintf(s, 64, L"%s (%lu%% of screen)", kSizeNames[i], kSizePct[i]);
+        if (kSizePct[i] == SIZE_PCT_MAX) _snwprintf(s, 64, L"%s (all free space)", kSizeNames[i]);
+        else _snwprintf(s, 64, L"%s (%lu%% of screen)", kSizeNames[i], kSizePct[i]);
         SendDlgItemMessageW(d, IDC_PREVIEW_SIZE, CB_ADDSTRING, 0, (LPARAM)s);
         if (g_set.sizePct >= kSizePct[i]) sel = i;
     }

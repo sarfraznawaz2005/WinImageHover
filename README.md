@@ -26,7 +26,7 @@ No install, no admin rights, no network access. One small `.exe`.
 - **Videos, camera RAW, PSD and more** show the Windows thumbnail, when Windows has one.
 - **Photo details** under the image: pixel size, file size, date taken (or modified), camera.
 - **Photos are shown upright** (EXIF orientation is applied).
-- **Settings:** hover delay, preview size, where previews show, "only while Shift is held",
+- **Settings:** hover delay, preview size (up to *Max*, which uses all free space around the mouse), where previews show, "only while Shift is held",
   and turn animation, thumbnails and details on or off.
 - **Start with Windows** (optional, current user only).
 - **Pause** from the tray menu.

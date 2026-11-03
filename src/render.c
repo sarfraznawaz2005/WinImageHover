@@ -12,6 +12,7 @@
 #define LINE_H         18
 #define MIN_WIDTH      240
 #define RADIUS         8
+#define SCREEN_MARGIN  8      /* Max mode: gap to the screen edge */
 
 static const BYTE BG = 0x20, BORDER = 0x4A;
 
@@ -25,6 +26,9 @@ static BYTE    *s_bg;           /* background template (rounded rect), W*H*4 */
 static int      s_W, s_H;
 static POINT    s_pos;
 static int      s_imgX, s_imgY;
+static int      s_imgW, s_imgH;  /* drawn image size (smaller than the frames in Max mode) */
+static BYTE   **s_scaled;        /* Max mode: frames scaled to s_imgW x s_imgH, made when first drawn */
+static int      s_scaledCount;
 
 static UINT     s_fontDpi;
 static HFONT    s_fontName, s_fontInfo;
@@ -47,12 +51,71 @@ static void MonitorAt(POINT pt, RECT *work, UINT *dpi)
     *dpi = dx;
 }
 
+static BOOL MaxMode(void) { return g_set.sizePct >= SIZE_PCT_MAX; }
+
+/* Height of the caption area for n text lines. */
+static int CaptionH(UINT dpi, int lines)
+{
+    return lines * MulDiv(LINE_H, dpi, 96) + MulDiv(PAD, dpi, 96) / 2;
+}
+
+/* Largest image size to decode. In Max mode: the whole work area minus frame and
+   caption, so the image can later be fitted into the biggest free side. */
 void PreviewBoxFor(POINT pt, int *maxW, int *maxH)
 {
     RECT wa; UINT dpi;
     MonitorAt(pt, &wa, &dpi);
+    if (MaxMode()) {
+        int pad = MulDiv(PAD, dpi, 96), m = MulDiv(SCREEN_MARGIN, dpi, 96);
+        *maxW = (int)(wa.right - wa.left) - 2 * m - 2 * pad;
+        *maxH = (int)(wa.bottom - wa.top) - 2 * m - 2 * pad - CaptionH(dpi, 2);
+        if (*maxW < 64) *maxW = 64;
+        if (*maxH < 64) *maxH = 64;
+        return;
+    }
     *maxW = (int)((wa.right - wa.left) * g_set.sizePct / 100);
     *maxH = (int)((wa.bottom - wa.top) * g_set.sizePct / 100);
+}
+
+/* Box-filter downscale of premultiplied BGRA. */
+static BYTE *ScaleDown(const BYTE *src, int sw, int sh, int dw, int dh)
+{
+    BYTE *dst = (BYTE *)malloc((size_t)dw * dh * 4);
+    if (!dst) return NULL;
+    for (int y = 0; y < dh; y++) {
+        int y0 = (int)((long long)y * sh / dh), y1 = (int)((long long)(y + 1) * sh / dh);
+        if (y1 <= y0) y1 = y0 + 1;
+        for (int x = 0; x < dw; x++) {
+            int x0 = (int)((long long)x * sw / dw), x1 = (int)((long long)(x + 1) * sw / dw);
+            if (x1 <= x0) x1 = x0 + 1;
+            unsigned sum[4] = {0, 0, 0, 0};
+            for (int yy = y0; yy < y1; yy++) {
+                const BYTE *s = src + ((size_t)yy * sw + x0) * 4;
+                for (int xx = x0; xx < x1; xx++, s += 4) {
+                    sum[0] += s[0]; sum[1] += s[1]; sum[2] += s[2]; sum[3] += s[3];
+                }
+            }
+            unsigned n = (unsigned)((y1 - y0) * (x1 - x0));
+            BYTE *d = dst + ((size_t)y * dw + x) * 4;
+            for (int c = 0; c < 4; c++) d[c] = (BYTE)((sum[c] + n / 2) / n);
+        }
+    }
+    return dst;
+}
+
+static void FreeScaled(void)
+{
+    for (int i = 0; i < s_scaledCount; i++) free(s_scaled[i]);
+    free(s_scaled);
+    s_scaled = NULL; s_scaledCount = 0;
+}
+
+/* Pixels of frame f at the drawn size (NULL if out of memory). */
+static const BYTE *FramePixels(int f)
+{
+    if (!s_scaled) return s_cur->frames[f];
+    if (!s_scaled[f]) s_scaled[f] = ScaleDown(s_cur->frames[f], s_cur->w, s_cur->h, s_imgW, s_imgH);
+    return s_scaled[f];
 }
 
 static void EnsureFonts(UINT dpi)
@@ -157,11 +220,11 @@ static void Render(void)
     memcpy(s_bits, s_bg, (size_t)s_W * s_H * 4);
 
     /* Image frame over the background (both premultiplied). */
-    const BYTE *src = s_cur->frames[s_frame];
-    for (int y = 0; y < s_cur->h; y++) {
-        const BYTE *s = src + (size_t)y * s_cur->w * 4;
+    const BYTE *src = FramePixels(s_frame);
+    for (int y = 0; src && y < s_imgH; y++) {
+        const BYTE *s = src + (size_t)y * s_imgW * 4;
         BYTE *d = s_bits + ((size_t)(s_imgY + y) * s_W + s_imgX) * 4;
-        for (int x = 0; x < s_cur->w; x++, s += 4, d += 4) {
+        for (int x = 0; x < s_imgW; x++, s += 4, d += 4) {
             BYTE a = s[3], inv = (BYTE)(255 - a);
             d[0] = (BYTE)(s[0] + d[0] * inv / 255);
             d[1] = (BYTE)(s[1] + d[1] * inv / 255);
@@ -222,9 +285,47 @@ void PreviewShow(Preview *p, POINT pt)
 
     int pad = MulDiv(PAD, dpi, 96);
     int lineH = MulDiv(LINE_H, dpi, 96);
-    int capH = s_lines * lineH + pad / 2;
-    int W = p->w + 2 * pad, H = p->h + 2 * pad + capH;
+    int capH = CaptionH(dpi, s_lines);
+    int off = MulDiv(CURSOR_OFFSET, dpi, 96);
+    int margin = MulDiv(SCREEN_MARGIN, dpi, 96);
+
+    /* Max mode: pick the side of the cursor (right, left, below, above) where the
+       image can be drawn largest, and shrink the image to fit that side. */
+    int side = -1, sideW = 0;
+    s_imgW = p->w; s_imgH = p->h;
+    if (MaxMode()) {
+        int fullW = (int)(wa.right - wa.left) - 2 * margin - 2 * pad;
+        int fullH = (int)(wa.bottom - wa.top) - 2 * margin - 2 * pad - capH;
+        int aw[4] = { (int)wa.right - margin - (pt.x + off) - 2 * pad,      /* right */
+                      (pt.x - off) - ((int)wa.left + margin) - 2 * pad,     /* left  */
+                      fullW, fullW };                                       /* below, above */
+        int ah[4] = { fullH, fullH,
+                      (int)wa.bottom - margin - (pt.y + off) - 2 * pad - capH,
+                      (pt.y - off) - ((int)wa.top + margin) - 2 * pad - capH };
+        double best = 0;
+        for (int i = 0; i < 4; i++) {
+            if (aw[i] < 16 || ah[i] < 16) continue;
+            double s = (double)aw[i] / p->w;
+            if ((double)ah[i] / p->h < s) s = (double)ah[i] / p->h;
+            if (s > 1) s = 1;
+            if (s > best + 1e-9) { best = s; side = i; }
+        }
+        if (side >= 0) {
+            sideW = aw[side] + 2 * pad;
+            s_imgW = (int)(p->w * best + 0.5); if (s_imgW < 1) s_imgW = 1;
+            s_imgH = (int)(p->h * best + 0.5); if (s_imgH < 1) s_imgH = 1;
+        }
+    }
+    FreeScaled();
+    if (s_imgW != p->w || s_imgH != p->h) {
+        s_scaled = (BYTE **)calloc((size_t)p->frameCount, sizeof(BYTE *));
+        if (!s_scaled) { s_imgW = p->w; s_imgH = p->h; }
+        else s_scaledCount = p->frameCount;
+    }
+
+    int W = s_imgW + 2 * pad, H = s_imgH + 2 * pad + capH;
     int minW = MulDiv(MIN_WIDTH, dpi, 96);
+    if (side >= 0 && minW > sideW) minW = sideW;
     if (W < minW) W = minW;
 
     /* Widen for the caption, up to the size limit, so details are not cut off. */
@@ -238,7 +339,8 @@ void PreviewShow(Preview *p, POINT pt)
         SelectObject(sdc, of);
         ReleaseDC(NULL, sdc);
         int textW = (t1.cx > t2.cx ? t1.cx : t2.cx) + 2 * pad + MulDiv(4, dpi, 96);
-        int limit = (int)((wa.right - wa.left) * g_set.sizePct / 100) + 2 * pad;
+        int limit = side >= 0 ? sideW
+                              : (int)((wa.right - wa.left) * (MaxMode() ? 45 : g_set.sizePct) / 100) + 2 * pad;
         if (textW > limit) textW = limit;
         if (W < textW) W = textW;
     }
@@ -257,19 +359,35 @@ void PreviewShow(Preview *p, POINT pt)
     s_W = W; s_H = H;
     BuildBackground(dpi);
 
-    s_imgX = (W - p->w) / 2;
+    s_imgX = (W - s_imgW) / 2;
     s_imgY = pad;
-    int ty = s_imgY + p->h + pad / 2;
+    int ty = s_imgY + s_imgH + pad / 2;
     SetRect(&s_rc1, pad, ty, W - pad, ty + lineH);
     SetRect(&s_rc2, pad, ty + lineH, W - pad, ty + 2 * lineH);
 
     /* Next to the cursor, never under it. */
-    int off = MulDiv(CURSOR_OFFSET, dpi, 96);
-    int x = pt.x + off, y = pt.y + off;
-    if (x + W > wa.right) x = pt.x - off - W;
-    if (x < wa.left) x = wa.left;
-    if (y + H > wa.bottom) y = pt.y - off - H;
-    if (y < wa.top) y = wa.top;
+    int x, y;
+    if (side >= 0) {
+        int lo = (int)wa.left + margin, hiX = (int)wa.right - margin - W;
+        int top = (int)wa.top + margin, hiY = (int)wa.bottom - margin - H;
+        if (side <= 1) {                                    /* right / left: centre on the cursor row */
+            x = side == 0 ? pt.x + off : pt.x - off - W;
+            y = pt.y - H / 2;
+            if (y > hiY) y = hiY;
+            if (y < top) y = top;
+        } else {                                            /* below / above: centre on the cursor column */
+            y = side == 2 ? pt.y + off : pt.y - off - H;
+            x = pt.x - W / 2;
+            if (x > hiX) x = hiX;
+            if (x < lo) x = lo;
+        }
+    } else {
+        x = pt.x + off; y = pt.y + off;
+        if (x + W > wa.right) x = pt.x - off - W;
+        if (x < wa.left) x = wa.left;
+        if (y + H > wa.bottom) y = pt.y - off - H;
+        if (y < wa.top) y = wa.top;
+    }
     s_pos.x = x; s_pos.y = y;
 
     s_cur = p;
@@ -284,6 +402,9 @@ void PreviewShow(Preview *p, POINT pt)
 }
 
 #ifdef IH_TEST
+/* Test only: where the preview window would be on screen. */
+void PreviewWindowRect(RECT *r) { SetRect(r, s_pos.x, s_pos.y, s_pos.x + s_W, s_pos.y + s_H); }
+
 /* Test only: save the composed preview (frame f) as a 32-bit BMP. */
 BOOL PreviewDump(int f, const WCHAR *bmpPath)
 {
@@ -312,6 +433,7 @@ void PreviewHide(void)
     if (IsWindowVisible(s_wnd)) ShowWindow(s_wnd, SW_HIDE);
     PreviewRelease(s_cur);
     s_cur = NULL;
+    FreeScaled();
 }
 
 BOOL PreviewVisible(void)        { return s_cur != NULL && IsWindowVisible(s_wnd); }

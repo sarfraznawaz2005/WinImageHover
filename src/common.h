@@ -43,6 +43,7 @@
 
 #define PATHBUF           1024
 #define WM_TRAY           (WM_APP + 1)
+#define SIZE_PCT_MAX 100   /* "Max" preview size */
 #define WM_PREVIEW_READY  (WM_APP + 2)   /* wParam = request id, lParam = Preview* or NULL */
 
 extern HINSTANCE g_inst;
@@ -62,7 +63,7 @@ int dbg_unused(const WCHAR *fmt, ...);   /* never defined: only used inside size
 /* ---- Settings (settings.c) ---- */
 typedef struct Settings {
     DWORD hoverMs;      /* rest time before a preview, 100..3000 */
-    DWORD sizePct;      /* max preview size, % of the monitor work area */
+    DWORD sizePct;      /* max preview size, % of the monitor work area; SIZE_PCT_MAX = use all free space */
     BOOL  inExplorer;
     BOOL  inDialogs;
     BOOL  onDesktop;
